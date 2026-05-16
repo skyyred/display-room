@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Display Room</title><link rel='stylesheet' href='/styles.css'></head><body>
+<div class='card'><h1>Create Room</h1><input id='roomName' placeholder='Room name (letters and numbers)'><button id='createBtn'>Create / Open Room</button><p id='err' class='err'></p><a href='/join.html'>Join existing room</a></div>
+<script>
+createBtn.onclick=async()=>{const roomName=roomName.value.trim();const res=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roomName})});const data=await res.json();if(!res.ok){err.textContent=data.error;return;}location.href=`/join.html?room=${encodeURIComponent(data.roomName)}`}
+</script></body></html>

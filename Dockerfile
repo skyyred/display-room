@@ -1,0 +1,15 @@
+FROM rockylinux:9
+
+RUN dnf -y install nodejs npm openssl && dnf clean all
+WORKDIR /app
+
+COPY package.json /app/package.json
+COPY server/package.json /app/server/package.json
+RUN npm install
+
+COPY server /app/server
+COPY client /app/client
+
+RUN mkdir -p /app/data /app/certs
+EXPOSE 8443/tcp 40000-40100/udp
+CMD ["npm", "--workspace", "server", "start"]

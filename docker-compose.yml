@@ -1,0 +1,22 @@
+services:
+  display-room:
+    build: .
+    container_name: display-room
+    environment:
+      HTTPS_PORT: 8443
+      HOST: 0.0.0.0
+      DB_PATH: /app/data/display-room.db
+      CERT_PATH: /app/certs/server.crt
+      KEY_PATH: /app/certs/server.key
+      MEDIA_LISTEN_IP: 0.0.0.0
+      MEDIA_ANNOUNCED_IP: 192.168.1.10
+      MEDIA_MIN_PORT: 40000
+      MEDIA_MAX_PORT: 40100
+      PRIVATE_ONLY: "true"
+    ports:
+      - "8443:8443"
+      - "40000-40100:40000-40100/udp"
+    volumes:
+      - ./data:/app/data
+      - ./certs:/app/certs
+    restart: unless-stopped

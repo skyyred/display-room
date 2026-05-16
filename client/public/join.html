@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Join Room</title><link rel='stylesheet' href='/styles.css'></head><body>
+<div class='card'><h1>Join Room</h1><input id='roomName' placeholder='Room name'><input id='displayName' placeholder='Display name'><button id='joinBtn'>Join</button><p id='err' class='err'></p></div>
+<script>
+const q=new URLSearchParams(location.search);roomName.value=q.get('room')||'';joinBtn.onclick=()=>{if(!roomName.value||!displayName.value){err.textContent='Room and display name are required';return;}location.href=`/room.html?room=${encodeURIComponent(roomName.value)}&name=${encodeURIComponent(displayName.value)}`}
+</script></body></html>
