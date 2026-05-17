@@ -1,11 +1,21 @@
 FROM rockylinux:9
 
-# Node.js 22 is required by current mediasoup releases.
-RUN dnf -y install dnf-plugins-core openssl ca-certificates \
-  && dnf -y module disable nodejs \
-  && dnf -y install https://rpm.nodesource.com/pub_22.x/nodistro/repo/nodesource-release-nodistro-1.noarch.rpm \
-  && dnf -y install nodejs gcc-c++ make python3 \
+# mediasoup currently requires Node.js >=22.
+RUN dnf -y install curl-minimal openssl ca-certificates gcc-c++ make python3 tar xz \
   && dnf clean all
+
+ARG NODE_VERSION=22.15.1
+RUN arch="$(uname -m)" \
+  && case "$arch" in \
+    x86_64) nodeArch='x64' ;; \
+    aarch64) nodeArch='arm64' ;; \
+    *) echo "Unsupported architecture: $arch"; exit 1 ;; \
+  esac \
+  && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${nodeArch}.tar.xz" -o /tmp/node.tar.xz \
+  && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+  && rm -f /tmp/node.tar.xz \
+  && node --version \
+  && npm --version
 
 WORKDIR /app
 
