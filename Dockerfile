@@ -1,6 +1,12 @@
 FROM rockylinux:9
 
-RUN dnf -y install nodejs npm openssl && dnf clean all
+# Node.js 22 is required by current mediasoup releases.
+RUN dnf -y install dnf-plugins-core curl openssl \
+  && dnf -y module disable nodejs \
+  && dnf -y install https://rpm.nodesource.com/pub_22.x/nodistro/repo/nodesource-release-nodistro-1.noarch.rpm \
+  && dnf -y install nodejs gcc-c++ make python3 \
+  && dnf clean all
+
 WORKDIR /app
 
 COPY package.json /app/package.json
