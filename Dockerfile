@@ -1,7 +1,7 @@
 FROM rockylinux:9
 
 # mediasoup currently requires Node.js >=22.
-RUN dnf -y install curl-minimal openssl ca-certificates gcc-c++ make python3 tar xz \
+RUN dnf -y install curl-minimal openssl ca-certificates gcc-c++ make python3 python3-pip tar xz \
   && dnf clean all
 
 ARG NODE_VERSION=22.15.1
