@@ -24,6 +24,15 @@ function updatePresenterControls() {
 
 const call = (event, payload = {}) => new Promise((resolve) => socket.emit(event, payload, resolve));
 
+async function attachVideoStream(mediaStream, { muted = false } = {}) {
+  remoteVideo.srcObject = mediaStream;
+  remoteVideo.muted = muted;
+  try {
+    await remoteVideo.play();
+  } catch {
+    status.textContent = 'Video attached. Click the video area if playback is blocked by browser autoplay policy.';
+  }
+}
 
 async function loadMediasoupClient() {
   if (window.mediasoupClient?.Device) return window.mediasoupClient;
@@ -82,7 +91,7 @@ startBtn.onclick = async () => {
       stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
     }
 
-    remoteVideo.srcObject = stream;
+    await attachVideoStream(stream, { muted: true });
     const track = stream.getVideoTracks()[0];
     producer = await sendTransport.produce({ track });
     track.onended = () => stopShare();
@@ -109,10 +118,11 @@ async function consumePresenter(producerId) {
   if (res.error) { status.textContent = res.error; return; }
   const consumer = await recvTransport.consume(res);
   const ms = new MediaStream([consumer.track]);
-  remoteVideo.srcObject = ms;
+  await attachVideoStream(ms, { muted: false });
 }
 
 socket.on('newPresenterStream', async ({ producerId }) => {
+  if (isCurrentPresenter()) return;
   await consumePresenter(producerId);
 });
 socket.on('presenceUpdate', ({ participants, presenterSocketId }) => renderParticipants(participants, presenterSocketId));
@@ -120,7 +130,7 @@ socket.on('presenterUpdate', ({ presenterSocketId }) => { currentPresenter = pre
 socket.on('presenterApprovalNeeded', ({ requesterId, requesterName }) => { pendingRequester = requesterId; approvalText.textContent = `${requesterName} requested presenter role.`; approvalBox.classList.remove('hidden'); });
 approveBtn.onclick = ()=>{ socket.emit('respondPresenterRequest',{requesterId:pendingRequester,approved:true}); approvalBox.classList.add('hidden');};
 denyBtn.onclick = ()=>{ socket.emit('respondPresenterRequest',{requesterId:pendingRequester,approved:false}); approvalBox.classList.add('hidden');};
-socket.on('presenterRequestResult', ({ approved }) => status.textContent = approved ? 'Presenter approved.' : 'Presenter denied your request.');
+socket.on('presenterRequestResult', ({ approved }) => { status.textContent = approved ? 'Presenter approved. You can now start sharing.' : 'Presenter denied your request.'; });
 socket.on('forceStopShare', stopShare);
 socket.on('chatMessage', addChatLine);
 socket.on('watermarkUpdate', ({ enabled, roomName }) => { watermarkToggle.checked = enabled; setWatermark(enabled, roomName); });
