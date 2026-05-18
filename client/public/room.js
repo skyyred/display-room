@@ -1,3 +1,10 @@
+
+const badHostnames = new Set(['0.0.0.0', 'localhost', '127.0.0.1']);
+if (badHostnames.has(location.hostname)) {
+  document.body.innerHTML = `<div class='card'><h2>Invalid access URL</h2><p>Open this app using the host LAN IP (example: https://10.0.0.118:8443), not ${location.hostname}.</p></div>`;
+  throw new Error('Invalid hostname for cross-machine WebRTC');
+}
+
 const qs = new URLSearchParams(location.search);
 const roomName = qs.get('room');
 const displayName = qs.get('name');
