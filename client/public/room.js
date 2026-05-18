@@ -10,6 +10,17 @@ let device, sendTransport, recvTransport, producer, stream;
 let currentPresenter = null;
 let pendingRequester = null;
 
+function isCurrentPresenter() {
+  return currentPresenter === socket.id;
+}
+
+function updatePresenterControls() {
+  const mine = isCurrentPresenter();
+  startBtn.disabled = !mine;
+  stopBtn.disabled = !mine;
+  requestPresenterBtn.disabled = mine;
+}
+
 const call = (event, payload = {}) => new Promise((resolve) => socket.emit(event, payload, resolve));
 
 
@@ -34,6 +45,7 @@ async function loadMediasoupClient() {
   currentPresenter = joined.presenterSocketId;
   renderParticipants(joined.participants, currentPresenter);
   presenter.textContent = currentPresenter ? '(active)' : 'None';
+  updatePresenterControls();
   watermarkToggle.checked = joined.watermarkEnabled;
   setWatermark(joined.watermarkEnabled);
   joined.chatHistory.forEach(addChatLine);
@@ -54,15 +66,30 @@ requestPresenterBtn.onclick = async () => {
 };
 
 startBtn.onclick = async () => {
+  if (!isCurrentPresenter()) {
+    status.textContent = 'Only the current presenter can start screen sharing.';
+    return;
+  }
+
   try {
     if (!sendTransport) return;
-    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-  } catch {
-    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    } catch {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    }
+
+    const track = stream.getVideoTracks()[0];
+    producer = await sendTransport.produce({ track });
+    track.onended = () => stopShare();
+    status.textContent = 'Screen sharing started.';
+  } catch (error) {
+    status.textContent = typeof error === 'string' ? error : (error?.message || 'Unable to start screen sharing.');
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+    }
   }
-  const track = stream.getVideoTracks()[0];
-  producer = await sendTransport.produce({ track });
-  track.onended = () => stopShare();
 };
 
 stopBtn.onclick = () => stopShare();
@@ -80,7 +107,7 @@ socket.on('newPresenterStream', async ({ producerId }) => {
   remoteVideo.srcObject = ms;
 });
 socket.on('presenceUpdate', ({ participants, presenterSocketId }) => renderParticipants(participants, presenterSocketId));
-socket.on('presenterUpdate', ({ presenterSocketId }) => { currentPresenter = presenterSocketId; presenter.textContent = presenterSocketId ? (presenterSocketId === socket.id ? 'You' : 'Active user') : 'None'; });
+socket.on('presenterUpdate', ({ presenterSocketId }) => { currentPresenter = presenterSocketId; presenter.textContent = presenterSocketId ? (presenterSocketId === socket.id ? 'You' : 'Active user') : 'None'; updatePresenterControls(); });
 socket.on('presenterApprovalNeeded', ({ requesterId, requesterName }) => { pendingRequester = requesterId; approvalText.textContent = `${requesterName} requested presenter role.`; approvalBox.classList.remove('hidden'); });
 approveBtn.onclick = ()=>{ socket.emit('respondPresenterRequest',{requesterId:pendingRequester,approved:true}); approvalBox.classList.add('hidden');};
 denyBtn.onclick = ()=>{ socket.emit('respondPresenterRequest',{requesterId:pendingRequester,approved:false}); approvalBox.classList.add('hidden');};
