@@ -33,11 +33,18 @@ export function getRouter() {
 
 export async function createWebRtcTransport() {
   return router.createWebRtcTransport({
-    listenInfos: [{
-      protocol: 'udp',
-      ip: env.MEDIA_LISTEN_IP,
-      announcedAddress: env.MEDIA_ANNOUNCED_IP || undefined
-    }],
+    listenInfos: [
+      {
+        protocol: 'udp',
+        ip: env.MEDIA_LISTEN_IP,
+        announcedAddress: env.MEDIA_ANNOUNCED_IP || undefined
+      },
+      {
+        protocol: 'tcp',
+        ip: env.MEDIA_LISTEN_IP,
+        announcedAddress: env.MEDIA_ANNOUNCED_IP || undefined
+      }
+    ],
     enableUdp: true,
     enableTcp: true,
     preferUdp: true

@@ -174,5 +174,6 @@ io.on('connection', (socket) => {
 httpsServer.listen(env.HTTPS_PORT, env.HOST, () => {
   console.log(`[startup] https://${env.HOST}:${env.HTTPS_PORT}`);
   console.log(`[startup] mediasoup listen=${env.MEDIA_LISTEN_IP} announced=${env.MEDIA_ANNOUNCED_IP || '(none)'}`);
+  if (!env.MEDIA_ANNOUNCED_IP) console.warn('[startup] MEDIA_ANNOUNCED_IP is empty. Remote machines may fail to receive stream behind Docker/NAT. Set it to this host LAN IP.');
   if (fs.existsSync(clientPath)) console.log(`[startup] serving client from ${clientPath}`);
 });
