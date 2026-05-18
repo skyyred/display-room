@@ -16,6 +16,7 @@ services:
     ports:
       - "8443:8443"
       - "40000-40100:40000-40100/udp"
+      - "40000-40100:40000-40100/tcp"
     volumes:
       - ./data:/app/data
       - ./certs:/app/certs

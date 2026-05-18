@@ -115,10 +115,13 @@ io.on('connection', (socket) => {
 
   socket.on('createTransport', async ({ direction }, cb) => {
     console.log(`[webrtc] createTransport socket=${socket.id} dir=${direction} room=${socket.data.roomName}`);
-    const transport = await createWebRtcTransport();
+    const hostHeader = socket.handshake.headers.host || '';
+    const hostFromHeader = hostHeader.split(':')[0];
+    const announcedAddress = env.MEDIA_ANNOUNCED_IP || hostFromHeader || undefined;
+    const transport = await createWebRtcTransport(announcedAddress);
     socket.data.transports.set(transport.id, transport);
     transport.on('dtlsstatechange', (state) => state === 'closed' && transport.close());
-    console.log(`[webrtc] transport created socket=${socket.id} id=${transport.id} dir=${direction} candidates=${transport.iceCandidates?.length ?? 0}`);
+    console.log(`[webrtc] transport created socket=${socket.id} id=${transport.id} dir=${direction} announced=${announcedAddress ?? '(none)'} candidates=${transport.iceCandidates?.length ?? 0}`);
     cb({ id: transport.id, iceParameters: transport.iceParameters, iceCandidates: transport.iceCandidates, dtlsParameters: transport.dtlsParameters, direction });
   });
 

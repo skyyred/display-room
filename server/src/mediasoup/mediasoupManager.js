@@ -31,18 +31,18 @@ export function getRouter() {
   return router;
 }
 
-export async function createWebRtcTransport() {
+export async function createWebRtcTransport(announcedAddressOverride) {
   return router.createWebRtcTransport({
     listenInfos: [
       {
         protocol: 'udp',
         ip: env.MEDIA_LISTEN_IP,
-        announcedAddress: env.MEDIA_ANNOUNCED_IP || undefined
+        announcedAddress: announcedAddressOverride || env.MEDIA_ANNOUNCED_IP || undefined
       },
       {
         protocol: 'tcp',
         ip: env.MEDIA_LISTEN_IP,
-        announcedAddress: env.MEDIA_ANNOUNCED_IP || undefined
+        announcedAddress: announcedAddressOverride || env.MEDIA_ANNOUNCED_IP || undefined
       }
     ],
     enableUdp: true,
