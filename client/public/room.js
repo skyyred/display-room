@@ -10,6 +10,7 @@ let device, sendTransport, recvTransport, producer, stream;
 let currentPresenter = null;
 let pendingRequester = null;
 let activeProducerId = null;
+let recvReady = false;
 
 function isCurrentPresenter() {
   return currentPresenter === socket.id;
@@ -69,6 +70,7 @@ async function loadMediasoupClient() {
   const recvInfo = await call('createTransport', { direction: 'recv' });
   recvTransport = device.createRecvTransport(recvInfo);
   recvTransport.on('connect', ({ dtlsParameters }, cb) => call('connectTransport', { transportId: recvInfo.id, dtlsParameters }).then(cb));
+  recvReady = true;
   if (activeProducerId) await consumePresenter(activeProducerId);
 })();
 
@@ -113,7 +115,7 @@ watermarkToggle.onchange = () => socket.emit('setWatermark', { enabled: watermar
 sendChat.onclick = () => { if (!chatInput.value.trim()) return; socket.emit('sendChat', { message: chatInput.value }); chatInput.value=''; };
 
 async function consumePresenter(producerId) {
-  if (!recvTransport || !device) return;
+  if (!recvTransport || !device || !recvReady) return;
   const res = await call('consume', { producerId, transportId: recvTransport.id, rtpCapabilities: device.rtpCapabilities });
   if (res.error) { status.textContent = res.error; return; }
   const consumer = await recvTransport.consume(res);
@@ -123,6 +125,7 @@ async function consumePresenter(producerId) {
 
 socket.on('newPresenterStream', async ({ producerId }) => {
   if (isCurrentPresenter()) return;
+  activeProducerId = producerId;
   await consumePresenter(producerId);
 });
 socket.on('presenceUpdate', ({ participants, presenterSocketId }) => renderParticipants(participants, presenterSocketId));
