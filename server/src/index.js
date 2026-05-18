@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import https from 'node:https';
 import express from 'express';
@@ -11,6 +12,29 @@ import { getRuntimeRoom, removePeer } from './mediasoup/roomRuntime.js';
 import { authenticateJoin } from './services/authService.js';
 import { addChatMessage, getChatHistory } from './services/chatService.js';
 import { getOrCreateRoom, listRooms, setRoomWatermark, validateRoomName } from './services/roomService.js';
+
+
+function pickLanIp() {
+  const nets = os.networkInterfaces();
+  for (const iface of Object.values(nets)) {
+    for (const item of iface || []) {
+      if (item.family === 'IPv4' && !item.internal) {
+        const ip = item.address;
+        if (ip.startsWith('10.') || ip.startsWith('192.168.') || /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)) {
+          return ip;
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+function normalizeAnnouncedAddress(hostValue) {
+  if (!hostValue) return undefined;
+  const h = hostValue.trim().toLowerCase();
+  if (!h || h === '0.0.0.0' || h === 'localhost' || h === '127.0.0.1' || h === '::1') return undefined;
+  return hostValue;
+}
 
 const app = express();
 app.use(express.json());
@@ -116,8 +140,8 @@ io.on('connection', (socket) => {
   socket.on('createTransport', async ({ direction }, cb) => {
     console.log(`[webrtc] createTransport socket=${socket.id} dir=${direction} room=${socket.data.roomName}`);
     const hostHeader = socket.handshake.headers.host || '';
-    const hostFromHeader = hostHeader.split(':')[0];
-    const announcedAddress = env.MEDIA_ANNOUNCED_IP || hostFromHeader || undefined;
+    const hostFromHeader = normalizeAnnouncedAddress(hostHeader.split(':')[0]);
+    const announcedAddress = normalizeAnnouncedAddress(env.MEDIA_ANNOUNCED_IP) || hostFromHeader || pickLanIp();
     const transport = await createWebRtcTransport(announcedAddress);
     socket.data.transports.set(transport.id, transport);
     transport.on('dtlsstatechange', (state) => state === 'closed' && transport.close());
@@ -189,6 +213,6 @@ io.on('connection', (socket) => {
 httpsServer.listen(env.HTTPS_PORT, env.HOST, () => {
   console.log(`[startup] https://${env.HOST}:${env.HTTPS_PORT}`);
   console.log(`[startup] mediasoup listen=${env.MEDIA_LISTEN_IP} announced=${env.MEDIA_ANNOUNCED_IP || '(none)'}`);
-  if (!env.MEDIA_ANNOUNCED_IP) console.warn('[startup] MEDIA_ANNOUNCED_IP is empty. Remote machines may fail to receive stream behind Docker/NAT. Set it to this host LAN IP.');
+  if (!normalizeAnnouncedAddress(env.MEDIA_ANNOUNCED_IP)) console.warn(`[startup] MEDIA_ANNOUNCED_IP is empty/invalid. Using detected LAN fallback: ${pickLanIp() || '(none)'}. Set MEDIA_ANNOUNCED_IP to host LAN IP for best reliability.`);
   if (fs.existsSync(clientPath)) console.log(`[startup] serving client from ${clientPath}`);
 });
