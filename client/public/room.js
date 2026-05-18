@@ -9,6 +9,7 @@ const socket = io();
 let device, sendTransport, recvTransport, producer, stream;
 let currentPresenter = null;
 let pendingRequester = null;
+let activeProducerId = null;
 
 function isCurrentPresenter() {
   return currentPresenter === socket.id;
@@ -47,6 +48,7 @@ async function loadMediasoupClient() {
   presenter.textContent = currentPresenter ? '(active)' : 'None';
   updatePresenterControls();
   watermarkToggle.checked = joined.watermarkEnabled;
+  activeProducerId = joined.activeProducerId;
   setWatermark(joined.watermarkEnabled);
   joined.chatHistory.forEach(addChatLine);
 
@@ -58,6 +60,7 @@ async function loadMediasoupClient() {
   const recvInfo = await call('createTransport', { direction: 'recv' });
   recvTransport = device.createRecvTransport(recvInfo);
   recvTransport.on('connect', ({ dtlsParameters }, cb) => call('connectTransport', { transportId: recvInfo.id, dtlsParameters }).then(cb));
+  if (activeProducerId) await consumePresenter(activeProducerId);
 })();
 
 requestPresenterBtn.onclick = async () => {
@@ -79,6 +82,7 @@ startBtn.onclick = async () => {
       stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
     }
 
+    remoteVideo.srcObject = stream;
     const track = stream.getVideoTracks()[0];
     producer = await sendTransport.produce({ track });
     track.onended = () => stopShare();
@@ -99,12 +103,17 @@ watermarkToggle.onchange = () => socket.emit('setWatermark', { enabled: watermar
 
 sendChat.onclick = () => { if (!chatInput.value.trim()) return; socket.emit('sendChat', { message: chatInput.value }); chatInput.value=''; };
 
-socket.on('newPresenterStream', async ({ producerId }) => {
+async function consumePresenter(producerId) {
+  if (!recvTransport || !device) return;
   const res = await call('consume', { producerId, transportId: recvTransport.id, rtpCapabilities: device.rtpCapabilities });
-  if (res.error) return status.textContent = res.error;
+  if (res.error) { status.textContent = res.error; return; }
   const consumer = await recvTransport.consume(res);
   const ms = new MediaStream([consumer.track]);
   remoteVideo.srcObject = ms;
+}
+
+socket.on('newPresenterStream', async ({ producerId }) => {
+  await consumePresenter(producerId);
 });
 socket.on('presenceUpdate', ({ participants, presenterSocketId }) => renderParticipants(participants, presenterSocketId));
 socket.on('presenterUpdate', ({ presenterSocketId }) => { currentPresenter = presenterSocketId; presenter.textContent = presenterSocketId ? (presenterSocketId === socket.id ? 'You' : 'Active user') : 'None'; updatePresenterControls(); });

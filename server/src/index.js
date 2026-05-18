@@ -61,7 +61,8 @@ io.on('connection', (socket) => {
       presenterSocketId: state.presenterSocketId,
       participants: [...state.peers.values()],
       chatHistory: getChatHistory(persistedRoom.id),
-      watermarkEnabled: persistedRoom.watermarkEnabled
+      watermarkEnabled: persistedRoom.watermarkEnabled,
+      activeProducerId: state.producer?.id ?? null
     });
 
     io.to(roomName).emit('presenceUpdate', {
