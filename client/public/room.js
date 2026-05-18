@@ -12,10 +12,24 @@ let pendingRequester = null;
 
 const call = (event, payload = {}) => new Promise((resolve) => socket.emit(event, payload, resolve));
 
+
+async function loadMediasoupClient() {
+  if (window.mediasoupClient?.Device) return window.mediasoupClient;
+  try {
+    const mod = await import('https://esm.sh/mediasoup-client@3');
+    if (mod?.Device) return mod;
+  } catch (error) {
+    status.textContent = 'Failed to load mediasoup client library. Check network access to CDN.';
+    throw error;
+  }
+  throw new Error('mediasoup client library unavailable');
+}
+
 (async function init(){
   const joined = await call('joinRoom', { roomName, displayName });
   if (joined.error) { status.textContent = joined.error; return; }
-  device = new mediasoupClient.Device();
+  const mediasoupLib = await loadMediasoupClient();
+  device = new mediasoupLib.Device();
   await device.load({ routerRtpCapabilities: joined.routerRtpCapabilities });
   currentPresenter = joined.presenterSocketId;
   renderParticipants(joined.participants, currentPresenter);
