@@ -12,6 +12,12 @@ let pendingRequester = null;
 let activeProducerId = null;
 let recvReady = false;
 
+function logClient(message, meta) {
+  const prefix = `[client:${socket.id || 'pending'}]`;
+  if (meta) console.log(prefix, message, meta);
+  else console.log(prefix, message);
+}
+
 function isCurrentPresenter() {
   return currentPresenter === socket.id;
 }
@@ -49,6 +55,7 @@ async function loadMediasoupClient() {
 
 (async function init(){
   const joined = await call('joinRoom', { roomName, displayName });
+  logClient('joinRoom response', joined);
   if (joined.error) { status.textContent = joined.error; return; }
   const mediasoupLib = await loadMediasoupClient();
   device = new mediasoupLib.Device();
@@ -63,11 +70,13 @@ async function loadMediasoupClient() {
   joined.chatHistory.forEach(addChatLine);
 
   const sendInfo = await call('createTransport', { direction: 'send' });
+  logClient('send transport info', sendInfo);
   sendTransport = device.createSendTransport(sendInfo);
   sendTransport.on('connect', ({ dtlsParameters }, cb) => call('connectTransport', { transportId: sendInfo.id, dtlsParameters }).then(cb));
   sendTransport.on('produce', ({ kind, rtpParameters }, cb, eb) => call('produce', { transportId: sendInfo.id, kind, rtpParameters }).then((r) => r.error ? eb(r.error) : cb({ id: r.id })));
 
   const recvInfo = await call('createTransport', { direction: 'recv' });
+  logClient('recv transport info', recvInfo);
   recvTransport = device.createRecvTransport(recvInfo);
   recvTransport.on('connect', ({ dtlsParameters }, cb) => call('connectTransport', { transportId: recvInfo.id, dtlsParameters }).then(cb));
   recvReady = true;
@@ -76,6 +85,7 @@ async function loadMediasoupClient() {
 
 requestPresenterBtn.onclick = async () => {
   const result = await call('requestPresenter');
+  logClient('requestPresenter result', result);
   status.textContent = result.pending ? 'Waiting for presenter approval...' : (result.approved ? 'Presenter granted.' : (result.error || 'Request failed'));
 };
 
@@ -96,6 +106,7 @@ startBtn.onclick = async () => {
     await attachVideoStream(stream, { muted: true });
     const track = stream.getVideoTracks()[0];
     producer = await sendTransport.produce({ track });
+    logClient('producer started', { producerId: producer.id, trackId: track.id });
     track.onended = () => stopShare();
     status.textContent = 'Screen sharing started.';
   } catch (error) {
@@ -117,6 +128,7 @@ sendChat.onclick = () => { if (!chatInput.value.trim()) return; socket.emit('sen
 async function consumePresenter(producerId) {
   if (!recvTransport || !device || !recvReady) return;
   const res = await call('consume', { producerId, transportId: recvTransport.id, rtpCapabilities: device.rtpCapabilities });
+  logClient('consume response', res);
   if (res.error) { status.textContent = res.error; return; }
   const consumer = await recvTransport.consume(res);
   const ms = new MediaStream([consumer.track]);
@@ -124,12 +136,13 @@ async function consumePresenter(producerId) {
 }
 
 socket.on('newPresenterStream', async ({ producerId }) => {
+  logClient('newPresenterStream event', { producerId, isCurrentPresenter: isCurrentPresenter(), recvReady });
   if (isCurrentPresenter()) return;
   activeProducerId = producerId;
   await consumePresenter(producerId);
 });
 socket.on('presenceUpdate', ({ participants, presenterSocketId }) => renderParticipants(participants, presenterSocketId));
-socket.on('presenterUpdate', ({ presenterSocketId }) => { currentPresenter = presenterSocketId; presenter.textContent = presenterSocketId ? (presenterSocketId === socket.id ? 'You' : 'Active user') : 'None'; updatePresenterControls(); });
+socket.on('presenterUpdate', ({ presenterSocketId }) => { logClient('presenterUpdate', { presenterSocketId }); currentPresenter = presenterSocketId; presenter.textContent = presenterSocketId ? (presenterSocketId === socket.id ? 'You' : 'Active user') : 'None'; updatePresenterControls(); });
 socket.on('presenterApprovalNeeded', ({ requesterId, requesterName }) => { pendingRequester = requesterId; approvalText.textContent = `${requesterName} requested presenter role.`; approvalBox.classList.remove('hidden'); });
 approveBtn.onclick = ()=>{ socket.emit('respondPresenterRequest',{requesterId:pendingRequester,approved:true}); approvalBox.classList.add('hidden');};
 denyBtn.onclick = ()=>{ socket.emit('respondPresenterRequest',{requesterId:pendingRequester,approved:false}); approvalBox.classList.add('hidden');};

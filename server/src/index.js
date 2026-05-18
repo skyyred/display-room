@@ -43,6 +43,7 @@ io.on('connection', (socket) => {
   socket.data = { transports: new Map(), consumers: new Map(), producer: null, roomName: null, displayName: null, roomId: null };
 
   socket.on('joinRoom', async ({ roomName, displayName }, cb) => {
+    console.log(`[room] join request socket=${socket.id} room=${roomName} user=${displayName}`);
     const auth = authenticateJoin({ displayName });
     if (!auth.ok) return cb({ error: auth.error });
     if (!validateRoomName(roomName)) return cb({ error: 'Invalid room name.' });
@@ -65,6 +66,7 @@ io.on('connection', (socket) => {
       activeProducerId: state.producer?.id ?? null
     });
 
+    console.log(`[room] joined socket=${socket.id} room=${roomName} peers=${state.peers.size} presenter=${state.presenterSocketId ?? 'none'} activeProducer=${state.producer?.id ?? 'none'}`);
     io.to(roomName).emit('presenceUpdate', {
       participants: [...state.peers.values()],
       presenterSocketId: state.presenterSocketId
@@ -72,12 +74,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('requestPresenter', (_payload, cb) => {
+    console.log(`[presenter] request socket=${socket.id} room=${socket.data.roomName}`);
     const roomName = socket.data.roomName;
     if (!roomName) return cb({ error: 'Join a room first.' });
     const state = getRuntimeRoom(roomName);
 
     if (!state.presenterSocketId) {
       state.presenterSocketId = socket.id;
+      console.log(`[presenter] auto-approved socket=${socket.id} room=${roomName}`);
       io.to(roomName).emit('presenterUpdate', { presenterSocketId: socket.id });
       return cb({ approved: true });
     }
@@ -110,19 +114,23 @@ io.on('connection', (socket) => {
   });
 
   socket.on('createTransport', async ({ direction }, cb) => {
+    console.log(`[webrtc] createTransport socket=${socket.id} dir=${direction} room=${socket.data.roomName}`);
     const transport = await createWebRtcTransport();
     socket.data.transports.set(transport.id, transport);
     transport.on('dtlsstatechange', (state) => state === 'closed' && transport.close());
+    console.log(`[webrtc] transport created socket=${socket.id} id=${transport.id} dir=${direction} candidates=${transport.iceCandidates?.length ?? 0}`);
     cb({ id: transport.id, iceParameters: transport.iceParameters, iceCandidates: transport.iceCandidates, dtlsParameters: transport.dtlsParameters, direction });
   });
 
   socket.on('connectTransport', async ({ transportId, dtlsParameters }, cb) => {
+    console.log(`[webrtc] connectTransport socket=${socket.id} transport=${transportId}`);
     const transport = socket.data.transports.get(transportId);
     await transport.connect({ dtlsParameters });
     cb({ ok: true });
   });
 
   socket.on('produce', async ({ transportId, kind, rtpParameters }, cb) => {
+    console.log(`[webrtc] produce request socket=${socket.id} room=${socket.data.roomName} transport=${transportId} kind=${kind}`);
     const roomName = socket.data.roomName;
     const state = getRuntimeRoom(roomName);
     if (state.presenterSocketId !== socket.id) return cb({ error: 'Only presenter can produce.' });
@@ -132,14 +140,17 @@ io.on('connection', (socket) => {
     if (state.producer) state.producer.close();
     state.producer = producer;
     producer.on('transportclose', () => producer.close());
+    console.log(`[webrtc] producer created socket=${socket.id} room=${roomName} producer=${producer.id}`);
     io.to(roomName).emit('newPresenterStream', { producerId: producer.id });
     cb({ id: producer.id });
   });
 
   socket.on('consume', async ({ producerId, transportId, rtpCapabilities }, cb) => {
+    console.log(`[webrtc] consume request socket=${socket.id} room=${socket.data.roomName} producer=${producerId} transport=${transportId}`);
     if (!getRouter().canConsume({ producerId, rtpCapabilities })) return cb({ error: 'Cannot consume this producer.' });
     const transport = socket.data.transports.get(transportId);
     const consumer = await transport.consume({ producerId, rtpCapabilities, paused: false });
+    console.log(`[webrtc] consume ok socket=${socket.id} consumer=${consumer.id} kind=${consumer.kind}`);
     socket.data.consumers.set(consumer.id, consumer);
     cb({ id: consumer.id, producerId, kind: consumer.kind, rtpParameters: consumer.rtpParameters });
   });
@@ -166,6 +177,7 @@ io.on('connection', (socket) => {
     if (socket.data.producer) socket.data.producer.close();
     removePeer(roomName, socket.id);
 
+    console.log(`[room] joined socket=${socket.id} room=${roomName} peers=${state.peers.size} presenter=${state.presenterSocketId ?? 'none'} activeProducer=${state.producer?.id ?? 'none'}`);
     io.to(roomName).emit('presenceUpdate', { participants: [...state.peers.values()], presenterSocketId: state.presenterSocketId });
     if (wasPresenter) io.to(roomName).emit('presenterUpdate', { presenterSocketId: null });
   });
