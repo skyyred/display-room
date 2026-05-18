@@ -87,7 +87,7 @@ io.on('connection', (socket) => {
       participants: [...state.peers.values()],
       chatHistory: getChatHistory(persistedRoom.id),
       watermarkEnabled: persistedRoom.watermarkEnabled,
-      activeProducerId: state.producer?.id ?? null
+      activeProducers: [...state.producers.values()].map((p) => ({ id: p.id, kind: p.kind }))
     });
 
     console.log(`[room] joined socket=${socket.id} room=${roomName} peers=${state.peers.size} presenter=${state.presenterSocketId ?? 'none'} activeProducer=${state.producer?.id ?? 'none'}`);
@@ -128,10 +128,8 @@ io.on('connection', (socket) => {
 
     const prevPresenter = state.presenterSocketId;
     state.presenterSocketId = requesterId;
-    if (state.producer) {
-      state.producer.close();
-      state.producer = null;
-    }
+    state.producers.forEach((producer) => producer.close());
+    state.producers.clear();
     io.to(prevPresenter).emit('forceStopShare');
     io.to(roomName).emit('presenterUpdate', { presenterSocketId: requesterId });
     io.to(requesterId).emit('presenterRequestResult', { approved: true });
@@ -163,12 +161,13 @@ io.on('connection', (socket) => {
     if (state.presenterSocketId !== socket.id) return cb({ error: 'Only presenter can produce.' });
     const transport = socket.data.transports.get(transportId);
     const producer = await transport.produce({ kind, rtpParameters });
-    socket.data.producer = producer;
-    if (state.producer) state.producer.close();
-    state.producer = producer;
+    if (kind === 'video' && state.producers.has('video')) state.producers.get('video').close();
+    if (kind === 'audio' && state.producers.has('audio')) state.producers.get('audio').close();
+    state.producers.set(kind, producer);
     producer.on('transportclose', () => producer.close());
-    console.log(`[webrtc] producer created socket=${socket.id} room=${roomName} producer=${producer.id}`);
-    io.to(roomName).emit('newPresenterStream', { producerId: producer.id });
+    producer.on('close', () => { if (state.producers.get(kind)?.id === producer.id) state.producers.delete(kind); });
+    console.log(`[webrtc] producer created socket=${socket.id} room=${roomName} producer=${producer.id} kind=${kind}`);
+    io.to(roomName).emit('newPresenterStream', { producerId: producer.id, kind: producer.kind });
     cb({ id: producer.id });
   });
 

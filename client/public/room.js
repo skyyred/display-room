@@ -16,7 +16,10 @@ const socket = io();
 let device, sendTransport, recvTransport, producer, stream;
 let currentPresenter = null;
 let pendingRequester = null;
-let activeProducerId = null;
+let activeProducerIds = [];
+let videoConsumer;
+let audioConsumer;
+let remoteMediaStream = new MediaStream();
 let recvReady = false;
 
 function logClient(message, meta) {
@@ -72,7 +75,7 @@ async function loadMediasoupClient() {
   presenter.textContent = currentPresenter ? '(active)' : 'None';
   updatePresenterControls();
   watermarkToggle.checked = joined.watermarkEnabled;
-  activeProducerId = joined.activeProducerId;
+  activeProducerIds = joined.activeProducers?.map((p) => p.id) || [];
   setWatermark(joined.watermarkEnabled);
   joined.chatHistory.forEach(addChatLine);
 
@@ -90,7 +93,7 @@ async function loadMediasoupClient() {
     recvReady = true;
     logClient('recv transport connected', { transportId: recvInfo.id });
   }));
-  if (activeProducerId) await consumePresenter(activeProducerId);
+  for (const producerId of activeProducerIds) await consumePresenter(producerId);
 })();
 
 requestPresenterBtn.onclick = async () => {
@@ -114,10 +117,15 @@ startBtn.onclick = async () => {
     }
 
     await attachVideoStream(stream, { muted: true });
-    const track = stream.getVideoTracks()[0];
-    producer = await sendTransport.produce({ track });
-    logClient('producer started', { producerId: producer.id, trackId: track.id });
-    track.onended = () => stopShare();
+    const videoTrack = stream.getVideoTracks()[0];
+    producer = await sendTransport.produce({ track: videoTrack });
+    logClient('video producer started', { producerId: producer.id, trackId: videoTrack.id });
+    const audioTrack = stream.getAudioTracks()[0];
+    if (audioTrack) {
+      const audioProducer = await sendTransport.produce({ track: audioTrack });
+      logClient('audio producer started', { producerId: audioProducer.id, trackId: audioTrack.id });
+    }
+    videoTrack.onended = () => stopShare();
     status.textContent = 'Screen sharing started.';
   } catch (error) {
     status.textContent = typeof error === 'string' ? error : (error?.message || 'Unable to start screen sharing.');
@@ -141,14 +149,25 @@ async function consumePresenter(producerId) {
   logClient('consume response', res);
   if (res.error) { status.textContent = res.error; return; }
   const consumer = await recvTransport.consume(res);
-  const ms = new MediaStream([consumer.track]);
-  await attachVideoStream(ms, { muted: false });
+  if (consumer.kind === 'video') {
+    if (videoConsumer) videoConsumer.close();
+    videoConsumer = consumer;
+    remoteMediaStream.getVideoTracks().forEach((t) => remoteMediaStream.removeTrack(t));
+    remoteMediaStream.addTrack(consumer.track);
+    await attachVideoStream(remoteMediaStream, { muted: false });
+  } else if (consumer.kind === 'audio') {
+    if (audioConsumer) audioConsumer.close();
+    audioConsumer = consumer;
+    remoteMediaStream.getAudioTracks().forEach((t) => remoteMediaStream.removeTrack(t));
+    remoteMediaStream.addTrack(consumer.track);
+    await attachVideoStream(remoteMediaStream, { muted: false });
+  }
 }
 
 socket.on('newPresenterStream', async ({ producerId }) => {
   logClient('newPresenterStream event', { producerId, isCurrentPresenter: isCurrentPresenter(), recvReady });
   if (isCurrentPresenter()) return;
-  activeProducerId = producerId;
+  if (!activeProducerIds.includes(producerId)) activeProducerIds.push(producerId);
   await consumePresenter(producerId);
 });
 socket.on('presenceUpdate', ({ participants, presenterSocketId }) => renderParticipants(participants, presenterSocketId));
