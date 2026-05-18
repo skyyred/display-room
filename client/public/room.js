@@ -11,8 +11,6 @@ let currentPresenter = null;
 let pendingRequester = null;
 let activeProducerId = null;
 let recvReady = false;
-let recvConnectedResolve;
-const recvConnected = new Promise((resolve) => { recvConnectedResolve = resolve; });
 
 function logClient(message, meta) {
   const prefix = `[client:${socket.id || 'pending'}]`;
@@ -83,7 +81,6 @@ async function loadMediasoupClient() {
   recvTransport.on('connect', ({ dtlsParameters }, cb) => call('connectTransport', { transportId: recvInfo.id, dtlsParameters }).then(() => {
     cb();
     recvReady = true;
-    recvConnectedResolve();
     logClient('recv transport connected', { transportId: recvInfo.id });
   }));
   if (activeProducerId) await consumePresenter(activeProducerId);
@@ -133,7 +130,6 @@ sendChat.onclick = () => { if (!chatInput.value.trim()) return; socket.emit('sen
 
 async function consumePresenter(producerId) {
   if (!recvTransport || !device) return;
-  if (!recvReady) await recvConnected;
   const res = await call('consume', { producerId, transportId: recvTransport.id, rtpCapabilities: device.rtpCapabilities });
   logClient('consume response', res);
   if (res.error) { status.textContent = res.error; return; }
