@@ -7,10 +7,13 @@
   "scripts": {
     "start": "npm --workspace server start",
     "dev": "npm --workspace server run dev",
-    "prepare-client-vendor": "mkdir -p client/public/vendor && for p in node_modules/mediasoup-client/lib/mediasoup-client.min.js node_modules/mediasoup-client/dist/mediasoup-client.min.js node_modules/mediasoup-client/npm-scripts/dist/mediasoup-client.min.js; do if [ -f \"$p\" ]; then cp \"$p\" client/public/vendor/mediasoup-client.min.js; echo \"Using $p\"; exit 0; fi; done; echo 'mediasoup-client.min.js not found in known paths' >&2; exit 1",
+    "prepare-client-vendor": "node tools/build-vendor.mjs",
     "postinstall": "npm run prepare-client-vendor"
   },
   "dependencies": {
     "mediasoup-client": "^3.15.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9"
   }
 }
