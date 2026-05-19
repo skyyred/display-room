@@ -21,6 +21,7 @@ WORKDIR /app
 
 COPY package.json /app/package.json
 COPY server/package.json /app/server/package.json
+COPY tools /app/tools
 RUN npm install
 
 COPY server /app/server
