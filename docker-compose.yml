@@ -21,3 +21,11 @@ services:
       - ./data:/app/data
       - ./certs:/app/certs
     restart: unless-stopped
+
+    networks:
+      - lan_only
+
+networks:
+  lan_only:
+    driver: bridge
+    internal: true

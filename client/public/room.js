@@ -51,15 +51,9 @@ async function attachVideoStream(mediaStream, { muted = false } = {}) {
   }
 }
 
-async function loadMediasoupClient() {
+function loadMediasoupClient() {
   if (window.mediasoupClient?.Device) return window.mediasoupClient;
-  try {
-    const mod = await import('https://esm.sh/mediasoup-client@3');
-    if (mod?.Device) return mod;
-  } catch (error) {
-    status.textContent = 'Failed to load mediasoup client library. Check network access to CDN.';
-    throw error;
-  }
+  status.textContent = 'mediasoup-client bundle missing. Run npm install/build on the server host.';
   throw new Error('mediasoup client library unavailable');
 }
 
@@ -67,7 +61,7 @@ async function loadMediasoupClient() {
   const joined = await call('joinRoom', { roomName, displayName });
   logClient('joinRoom response', joined);
   if (joined.error) { status.textContent = joined.error; return; }
-  const mediasoupLib = await loadMediasoupClient();
+  const mediasoupLib = loadMediasoupClient();
   device = new mediasoupLib.Device();
   await device.load({ routerRtpCapabilities: joined.routerRtpCapabilities });
   currentPresenter = joined.presenterSocketId;
