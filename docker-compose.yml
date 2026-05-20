@@ -21,3 +21,10 @@ services:
       - ./data:/app/data
       - ./certs:/app/certs
     restart: unless-stopped
+    networks:
+      - runtime_isolated
+
+networks:
+  runtime_isolated:
+    driver: bridge
+    internal: true
