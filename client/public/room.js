@@ -86,6 +86,27 @@ async function consume(producerId) {
   await attach(ms, false);
 }
 
+
+async function getLinuxMonitorAudioTrack() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const monitor = devices.find((d) => d.kind === 'audioinput' && d.label.toLowerCase().includes('pcoip-virtual-out.monitor'));
+    if (!monitor) return null;
+    const audioStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: { exact: monitor.deviceId },
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      },
+      video: false
+    });
+    return audioStream.getAudioTracks()[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 async function beginSharing() {
   try {
     try { stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }); }
@@ -93,7 +114,11 @@ async function beginSharing() {
     await attach(stream, true);
     const v = stream.getVideoTracks()[0];
     videoProducer = await sendTransport.produce({ track: v });
-    const a = stream.getAudioTracks()[0];
+    let a = stream.getAudioTracks()[0];
+    if (!a) {
+      a = await getLinuxMonitorAudioTrack();
+      if (a) status.textContent = 'Sharing started with Linux monitor audio (pcoip-virtual-out.monitor).';
+    }
     if (a) await sendTransport.produce({ track: a });
     v.onended = () => stopBtn.onclick();
     status.textContent = 'Sharing started.';
