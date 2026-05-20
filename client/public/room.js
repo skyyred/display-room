@@ -79,6 +79,7 @@ async function consume(producerId) {
   const res = await call('consume', { producerId, transportId: recvTransport.id, rtpCapabilities: device.rtpCapabilities });
   if (res.error) { status.textContent = res.error; return; }
   const consumer = await recvTransport.consume(res);
+  console.log('[media] consumer created', { producerId, consumerId: consumer.id, kind: consumer.kind });
   const ms = remoteVideo.srcObject instanceof MediaStream ? remoteVideo.srcObject : new MediaStream();
   const existing = consumer.kind === 'video' ? ms.getVideoTracks() : ms.getAudioTracks();
   existing.forEach((t) => ms.removeTrack(t));
@@ -88,10 +89,11 @@ async function consume(producerId) {
 
 
 async function getLinuxMonitorAudioTrack() {
+  console.log('[audio] searching for pcoip-virtual-out.monitor');
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const monitor = devices.find((d) => d.kind === 'audioinput' && d.label.toLowerCase().includes('pcoip-virtual-out.monitor'));
-    if (!monitor) return null;
+    if (!monitor) { console.warn('[audio] pcoip-virtual-out.monitor not found among audioinput devices'); return null; }
     const audioStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: { exact: monitor.deviceId },
@@ -101,8 +103,11 @@ async function getLinuxMonitorAudioTrack() {
       },
       video: false
     });
-    return audioStream.getAudioTracks()[0] || null;
-  } catch {
+    const track = audioStream.getAudioTracks()[0] || null;
+    if (track) console.log('[audio] monitor track acquired', { id: track.id, label: track.label });
+    return track;
+  } catch (error) {
+    console.error('[audio] monitor capture failed', error);
     return null;
   }
 }
@@ -114,14 +119,17 @@ async function beginSharing() {
     await attach(stream, true);
     const v = stream.getVideoTracks()[0];
     videoProducer = await sendTransport.produce({ track: v });
-    let a = stream.getAudioTracks()[0];
+    // Always use Linux system monitor source for audio in this prototype.
+    stream.getAudioTracks().forEach((t) => t.stop());
+    let a = await getLinuxMonitorAudioTrack();
     if (!a) {
-      a = await getLinuxMonitorAudioTrack();
-      if (a) status.textContent = 'Sharing started with Linux monitor audio (pcoip-virtual-out.monitor).';
+      status.textContent = 'Unable to capture system audio from pcoip-virtual-out.monitor.';
+      throw new Error('System audio source pcoip-virtual-out.monitor not available');
     }
-    if (a) await sendTransport.produce({ track: a });
+    const audioProducer = await sendTransport.produce({ track: a });
+    console.log('[audio] producer started', { producerId: audioProducer.id, trackId: a.id, label: a.label });
     v.onended = () => stopBtn.onclick();
-    status.textContent = 'Sharing started.';
+    status.textContent = 'Sharing started with system audio.';
     pendingStart = false;
   } catch (e) {
     pendingStart = false;
