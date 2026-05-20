@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Display Room</title><link rel='stylesheet' href='/styles.css'></head><body>
+<div class='layout full'>
+<section class='mainFull'>
+  <div class='topBar'>
+    <h2>Current sharer: <span id='currentSharer'>None</span></h2>
+    <div class='controls'>
+      <button id='startBtn'>Start Sharing</button>
+      <button id='stopBtn'>Stop Sharing</button>
+      <button id='toggleParticipants'>Show/Hide Participants</button>
+    </div>
+  </div>
+  <div class='videoWrap full'><video id='remoteVideo' autoplay playsinline></video></div>
+  <p id='status'></p>
+</section>
+<aside id='participantsPanel' class='hidden'><h3>Participants</h3><ul id='participants'></ul><div id='approvalBox' class='hidden'><p id='approvalText'></p><button id='approveBtn'>Approve</button><button id='denyBtn'>Deny</button></div></aside>
+</div>
+<script src='/socket.io/socket.io.js'></script><script src='/vendor/mediasoup-client.min.js'></script><script src='/room.js'></script>
+</body></html>

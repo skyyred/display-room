@@ -1,0 +1,19 @@
+{
+  "name": "display-room",
+  "private": true,
+  "workspaces": [
+    "server"
+  ],
+  "scripts": {
+    "start": "npm --workspace server start",
+    "dev": "npm --workspace server run dev",
+    "prepare-client-vendor": "node tools/build-vendor.mjs",
+    "postinstall": "npm run prepare-client-vendor"
+  },
+  "dependencies": {
+    "mediasoup-client": "^3.15.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9"
+  }
+}
