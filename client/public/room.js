@@ -63,11 +63,21 @@ async function attach(mediaStream, muted = false) {
   recvTransport.on('connect', ({ dtlsParameters }, cb) => call('connectTransport', { transportId: recvInfo.id, dtlsParameters }).then(cb));
 
   for (const p of joined.activeProducers || []) await consume(p.id);
+  await syncActiveProducers();
 })();
+
+
+async function syncActiveProducers() {
+  const res = await call('getActiveProducers');
+  for (const p of res.producers || []) {
+    if (!activeProducerIds.includes(p.id)) activeProducerIds.push(p.id);
+    await consume(p.id);
+  }
+}
 
 async function consume(producerId) {
   const res = await call('consume', { producerId, transportId: recvTransport.id, rtpCapabilities: device.rtpCapabilities });
-  if (res.error) return;
+  if (res.error) { status.textContent = res.error; return; }
   const consumer = await recvTransport.consume(res);
   const ms = remoteVideo.srcObject instanceof MediaStream ? remoteVideo.srcObject : new MediaStream();
   const existing = consumer.kind === 'video' ? ms.getVideoTracks() : ms.getAudioTracks();

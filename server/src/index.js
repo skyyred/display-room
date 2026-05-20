@@ -187,6 +187,14 @@ io.on('connection', (socket) => {
     cb({ id: producer.id });
   });
 
+
+  socket.on('getActiveProducers', (_payload, cb) => {
+    const roomName = socket.data.roomName;
+    if (!roomName) return cb({ producers: [] });
+    const state = getRuntimeRoom(roomName);
+    cb({ producers: [...state.producers.values()].map((p) => ({ id: p.id, kind: p.kind })) });
+  });
+
   socket.on('consume', async ({ producerId, transportId, rtpCapabilities }, cb) => {
     console.log(`[webrtc] consume request socket=${socket.id} room=${socket.data.roomName} producer=${producerId} transport=${transportId}`);
     if (!getRouter().canConsume({ producerId, rtpCapabilities })) return cb({ error: 'Cannot consume this producer.' });
