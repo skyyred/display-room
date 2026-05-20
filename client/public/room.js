@@ -91,21 +91,46 @@ async function consume(producerId) {
 async function getLinuxMonitorAudioTrack() {
   console.log('[audio] searching for pcoip-virtual-out.monitor');
   try {
+    // Ensure device labels are populated (browsers often hide labels until permission granted).
+    const warmup = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    warmup.getTracks().forEach((t) => t.stop());
+
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const monitor = devices.find((d) => d.kind === 'audioinput' && d.label.toLowerCase().includes('pcoip-virtual-out.monitor'));
-    if (!monitor) { console.warn('[audio] pcoip-virtual-out.monitor not found among audioinput devices'); return null; }
-    const audioStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: { exact: monitor.deviceId },
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      },
-      video: false
-    });
-    const track = audioStream.getAudioTracks()[0] || null;
-    if (track) console.log('[audio] monitor track acquired', { id: track.id, label: track.label });
-    return track;
+    const inputs = devices.filter((d) => d.kind === 'audioinput');
+    console.log('[audio] available audioinput devices', inputs.map((d) => ({ deviceId: d.deviceId, label: d.label })));
+
+    const preferred = inputs.find((d) => d.label.toLowerCase().includes('pcoip-virtual-out.monitor'));
+    const ordered = preferred ? [preferred, ...inputs.filter((d) => d.deviceId !== preferred.deviceId)] : inputs;
+
+    for (const dev of ordered) {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: dev.deviceId },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          },
+          video: false
+        });
+        const track = audioStream.getAudioTracks()[0] || null;
+        if (!track) continue;
+
+        const label = (track.label || dev.label || '').toLowerCase();
+        if (label.includes('pcoip-virtual-out.monitor') || label.includes('monitor')) {
+          console.log('[audio] monitor track acquired', { id: track.id, label: track.label || dev.label });
+          return track;
+        }
+
+        // Not the monitor source we want; close and keep trying.
+        audioStream.getTracks().forEach((t) => t.stop());
+      } catch (err) {
+        console.warn('[audio] failed probing device', dev.label || dev.deviceId, err?.message || err);
+      }
+    }
+
+    console.warn('[audio] pcoip-virtual-out.monitor not found among accessible audioinput devices');
+    return null;
   } catch (error) {
     console.error('[audio] monitor capture failed', error);
     return null;
