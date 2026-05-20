@@ -3,29 +3,21 @@ services:
     build: .
     container_name: display-room
     environment:
-      HTTPS_PORT: 8443
+      HTTPS_PORT: ${HTTPS_PORT:-8443}
       HOST: 0.0.0.0
       DB_PATH: /app/data/display-room.db
       CERT_PATH: /app/certs/server.crt
       KEY_PATH: /app/certs/server.key
       MEDIA_LISTEN_IP: 0.0.0.0
       MEDIA_ANNOUNCED_IP: ${MEDIA_ANNOUNCED_IP:-}
-      MEDIA_MIN_PORT: 40000
-      MEDIA_MAX_PORT: 40100
+      MEDIA_MIN_PORT: ${MEDIA_MIN_PORT:-40000}
+      MEDIA_MAX_PORT: ${MEDIA_MAX_PORT:-40100}
       PRIVATE_ONLY: "true"
     ports:
-      - "8443:8443"
-      - "40000-40100:40000-40100/udp"
-      - "40000-40100:40000-40100/tcp"
+      - "${HTTPS_PORT:-8443}:${HTTPS_PORT:-8443}"
+      - "${MEDIA_MIN_PORT:-40000}-${MEDIA_MAX_PORT:-40100}:${MEDIA_MIN_PORT:-40000}-${MEDIA_MAX_PORT:-40100}/udp"
+      - "${MEDIA_MIN_PORT:-40000}-${MEDIA_MAX_PORT:-40100}:${MEDIA_MIN_PORT:-40000}-${MEDIA_MAX_PORT:-40100}/tcp"
     volumes:
       - ./data:/app/data
       - ./certs:/app/certs
     restart: unless-stopped
-
-    networks:
-      - lan_only
-
-networks:
-  lan_only:
-    driver: bridge
-    internal: true
