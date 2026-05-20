@@ -9,7 +9,6 @@ const roomName = qs.get('room');
 const displayName = qs.get('name');
 if (!roomName || !displayName) location.href = '/join.html';
 document.title = `Room ${roomName} - Display Room`;
-me.textContent = `You: ${displayName}`;
 
 const socket = io();
 let device, sendTransport, recvTransport, videoProducer, stream;
