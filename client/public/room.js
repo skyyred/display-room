@@ -16,6 +16,7 @@ let currentPresenter = null;
 let pendingRequester = null;
 let participantsList = [];
 let presenterDisplayName = null;
+let pendingStart = false;
 
 const call = (event, payload = {}) => new Promise((resolve) => socket.emit(event, payload, resolve));
 
@@ -75,12 +76,7 @@ async function consume(producerId) {
   await attach(ms, false);
 }
 
-startBtn.onclick = async () => {
-  if (!sendTransport) return;
-  const result = await call('requestPresenter');
-  if (result.pending) return (status.textContent = 'Waiting for current sharer approval...');
-  if (!result.approved) return (status.textContent = result.error || 'Cannot start sharing.');
-
+async function beginSharing() {
   try {
     try { stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }); }
     catch { stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false }); }
@@ -91,15 +87,27 @@ startBtn.onclick = async () => {
     if (a) await sendTransport.produce({ track: a });
     v.onended = () => stopBtn.onclick();
     status.textContent = 'Sharing started.';
+    pendingStart = false;
   } catch (e) {
+    pendingStart = false;
     status.textContent = e?.message || 'Unable to start sharing.';
   }
+}
+
+startBtn.onclick = async () => {
+  if (!sendTransport) return;
+  pendingStart = true;
+  const result = await call('requestPresenter');
+  if (result.pending) return (status.textContent = 'Waiting for current sharer approval...');
+  if (!result.approved) { pendingStart = false; return (status.textContent = result.error || 'Cannot start sharing.'); }
+  await beginSharing();
 };
 
 stopBtn.onclick = () => {
   if (videoProducer) { videoProducer.close(); videoProducer = null; }
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   remoteVideo.srcObject = null;
+  socket.emit('stopSharing');
   status.textContent = 'Sharing stopped.';
 };
 
@@ -111,5 +119,13 @@ socket.on('presenterUpdate', ({ presenterSocketId, presenterName: nextPresenterN
 socket.on('presenterApprovalNeeded', ({ requesterId, requesterName }) => { pendingRequester = requesterId; approvalText.textContent = `${requesterName} wants to take over sharing.`; approvalBox.classList.remove('hidden'); });
 approveBtn.onclick = () => { socket.emit('respondPresenterRequest', { requesterId: pendingRequester, approved: true }); approvalBox.classList.add('hidden'); };
 denyBtn.onclick = () => { socket.emit('respondPresenterRequest', { requesterId: pendingRequester, approved: false }); approvalBox.classList.add('hidden'); };
-socket.on('presenterRequestResult', ({ approved }) => { status.textContent = approved ? 'Takeover approved. Click Start Sharing now.' : 'Takeover denied.'; });
+socket.on('presenterRequestResult', async ({ approved }) => {
+  if (approved && pendingStart) {
+    status.textContent = 'Takeover approved. Starting share...';
+    await beginSharing();
+    return;
+  }
+  pendingStart = false;
+  status.textContent = approved ? 'Takeover approved.' : 'Takeover denied.';
+});
 socket.on('forceStopShare', stopBtn.onclick);

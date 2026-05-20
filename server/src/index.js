@@ -108,7 +108,9 @@ io.on('connection', (socket) => {
     if (!roomName) return cb({ error: 'Join a room first.' });
     const state = getRuntimeRoom(roomName);
 
-    if (!state.presenterSocketId) {
+    const sharingActive = state.producers.has('video');
+
+    if (!sharingActive || !state.presenterSocketId) {
       state.presenterSocketId = socket.id;
       state.presenterName = socket.data.displayName;
       console.log(`[presenter] auto-approved socket=${socket.id} room=${roomName}`);
@@ -207,6 +209,19 @@ io.on('connection', (socket) => {
     io.to(socket.data.roomName).emit('watermarkUpdate', { enabled: !!enabled, roomName: socket.data.roomName });
   });
 
+
+  socket.on('stopSharing', () => {
+    const roomName = socket.data.roomName;
+    if (!roomName) return;
+    const state = getRuntimeRoom(roomName);
+    if (state.presenterSocketId !== socket.id) return;
+    state.producers.forEach((producer) => producer.close());
+    state.producers.clear();
+    state.presenterSocketId = null;
+    state.presenterName = null;
+    io.to(roomName).emit('presenterUpdate', { presenterSocketId: null, presenterName: null });
+  });
+
   socket.on('disconnect', () => {
     const roomName = socket.data.roomName;
     if (!roomName) return;
@@ -221,7 +236,8 @@ io.on('connection', (socket) => {
     io.to(roomName).emit('presenceUpdate', { participants: [...state.peers.values()], presenterSocketId: state.presenterSocketId });
     if (wasPresenter) {
       state.presenterSocketId = null;
-      io.to(roomName).emit('presenterUpdate', { presenterSocketId: null, presenterName: state.presenterName });
+      state.presenterName = null;
+      io.to(roomName).emit('presenterUpdate', { presenterSocketId: null, presenterName: null });
     }
   });
 });
