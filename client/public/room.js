@@ -99,8 +99,13 @@ async function getLinuxMonitorAudioTrack() {
     const inputs = devices.filter((d) => d.kind === 'audioinput');
     console.log('[audio] available audioinput devices', inputs.map((d) => ({ deviceId: d.deviceId, label: d.label })));
 
-    const preferred = inputs.find((d) => d.label.toLowerCase().includes('pcoip-virtual-out.monitor'));
-    const ordered = preferred ? [preferred, ...inputs.filter((d) => d.deviceId !== preferred.deviceId)] : inputs;
+    const preferredPatterns = ['pcoip-virtual-out.monitor', 'pcoipvirtualout.monitor', 'monitor', 'pcoipvirtualin', 'pcoipvirtual'];
+    const score = (label) => {
+      const l = (label || '').toLowerCase();
+      const idx = preferredPatterns.findIndex((p) => l.includes(p));
+      return idx === -1 ? 999 : idx;
+    };
+    const ordered = [...inputs].sort((a, b) => score(a.label) - score(b.label));
 
     for (const dev of ordered) {
       try {
@@ -117,7 +122,7 @@ async function getLinuxMonitorAudioTrack() {
         if (!track) continue;
 
         const label = (track.label || dev.label || '').toLowerCase();
-        if (label.includes('pcoip-virtual-out.monitor') || label.includes('monitor')) {
+        if (label.includes('pcoip-virtual-out.monitor') || label.includes('monitor') || label.includes('pcoipvirtualin') || label.includes('pcoipvirtual')) {
           console.log('[audio] monitor track acquired', { id: track.id, label: track.label || dev.label });
           return track;
         }
@@ -129,7 +134,7 @@ async function getLinuxMonitorAudioTrack() {
       }
     }
 
-    console.warn('[audio] pcoip-virtual-out.monitor not found among accessible audioinput devices');
+    console.warn('[audio] preferred monitor source not found; attempted monitor/pcoip virtual device fallbacks');
     return null;
   } catch (error) {
     console.error('[audio] monitor capture failed', error);
