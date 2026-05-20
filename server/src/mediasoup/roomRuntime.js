@@ -5,6 +5,7 @@ export function getRuntimeRoom(roomName) {
     runtimeRooms.set(roomName, {
       peers: new Map(),
       presenterSocketId: null,
+      presenterName: null,
       pendingPresenterRequest: null,
       producers: new Map()
     });
@@ -21,6 +22,7 @@ export function removePeer(roomName, socketId) {
   }
   if (room.presenterSocketId === socketId) {
     room.presenterSocketId = null;
+    room.presenterName = null;
     room.producers.forEach((producer) => producer.close());
     room.producers.clear();
   }

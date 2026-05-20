@@ -81,9 +81,14 @@ io.on('connection', (socket) => {
     socket.data.roomId = persistedRoom.id;
     state.peers.set(socket.id, { socketId: socket.id, displayName });
 
+    if (!state.presenterSocketId && state.presenterName && state.presenterName === displayName) {
+      state.presenterSocketId = socket.id;
+    }
+
     cb({
       routerRtpCapabilities: getRouter().rtpCapabilities,
       presenterSocketId: state.presenterSocketId,
+      presenterName: state.presenterName,
       participants: [...state.peers.values()],
       chatHistory: getChatHistory(persistedRoom.id),
       watermarkEnabled: persistedRoom.watermarkEnabled,
@@ -105,11 +110,19 @@ io.on('connection', (socket) => {
 
     if (!state.presenterSocketId) {
       state.presenterSocketId = socket.id;
+      state.presenterName = socket.data.displayName;
       console.log(`[presenter] auto-approved socket=${socket.id} room=${roomName}`);
-      io.to(roomName).emit('presenterUpdate', { presenterSocketId: socket.id });
+      io.to(roomName).emit('presenterUpdate', { presenterSocketId: socket.id, presenterName: state.presenterName });
       return cb({ approved: true });
     }
     if (state.presenterSocketId === socket.id) return cb({ approved: true });
+
+    if (!state.peers.has(state.presenterSocketId)) {
+      state.presenterSocketId = socket.id;
+      state.presenterName = socket.data.displayName;
+      io.to(roomName).emit('presenterUpdate', { presenterSocketId: socket.id, presenterName: state.presenterName });
+      return cb({ approved: true });
+    }
 
     state.pendingPresenterRequest = { requesterId: socket.id };
     io.to(state.presenterSocketId).emit('presenterApprovalNeeded', { requesterId: socket.id, requesterName: socket.data.displayName });
@@ -128,10 +141,11 @@ io.on('connection', (socket) => {
 
     const prevPresenter = state.presenterSocketId;
     state.presenterSocketId = requesterId;
+    state.presenterName = state.peers.get(requesterId)?.displayName || null;
     state.producers.forEach((producer) => producer.close());
     state.producers.clear();
     io.to(prevPresenter).emit('forceStopShare');
-    io.to(roomName).emit('presenterUpdate', { presenterSocketId: requesterId });
+    io.to(roomName).emit('presenterUpdate', { presenterSocketId: requesterId, presenterName: state.presenterName });
     io.to(requesterId).emit('presenterRequestResult', { approved: true });
   });
 
@@ -205,7 +219,10 @@ io.on('connection', (socket) => {
 
     console.log(`[room] joined socket=${socket.id} room=${roomName} peers=${state.peers.size} presenter=${state.presenterSocketId ?? 'none'} activeProducer=${state.producer?.id ?? 'none'}`);
     io.to(roomName).emit('presenceUpdate', { participants: [...state.peers.values()], presenterSocketId: state.presenterSocketId });
-    if (wasPresenter) io.to(roomName).emit('presenterUpdate', { presenterSocketId: null });
+    if (wasPresenter) {
+      state.presenterSocketId = null;
+      io.to(roomName).emit('presenterUpdate', { presenterSocketId: null, presenterName: state.presenterName });
+    }
   });
 });
 

@@ -15,12 +15,13 @@ let device, sendTransport, recvTransport, videoProducer, stream;
 let currentPresenter = null;
 let pendingRequester = null;
 let participantsList = [];
+let presenterDisplayName = null;
 
 const call = (event, payload = {}) => new Promise((resolve) => socket.emit(event, payload, resolve));
 
 function presenterName() {
   const p = participantsList.find((x) => x.socketId === currentPresenter);
-  return p?.displayName || 'None';
+  return p?.displayName || presenterDisplayName || 'None';
 }
 function renderParticipants(parts, presenterSocketId) {
   participantsList = parts;
@@ -48,6 +49,7 @@ async function attach(mediaStream, muted = false) {
   device = new mediasoupLib.Device();
   await device.load({ routerRtpCapabilities: joined.routerRtpCapabilities });
   currentPresenter = joined.presenterSocketId;
+  presenterDisplayName = joined.presenterName || null;
   renderParticipants(joined.participants, currentPresenter);
 
   const sendInfo = await call('createTransport', { direction: 'send' });
@@ -105,9 +107,9 @@ toggleParticipants.onclick = () => participantsPanel.classList.toggle('hidden');
 
 socket.on('newPresenterStream', async ({ producerId }) => { if (currentPresenter !== socket.id) await consume(producerId); });
 socket.on('presenceUpdate', ({ participants, presenterSocketId }) => { currentPresenter = presenterSocketId; renderParticipants(participants, presenterSocketId); });
-socket.on('presenterUpdate', ({ presenterSocketId }) => { currentPresenter = presenterSocketId; currentSharer.textContent = presenterName(); });
+socket.on('presenterUpdate', ({ presenterSocketId, presenterName: nextPresenterName }) => { currentPresenter = presenterSocketId; presenterDisplayName = nextPresenterName || null; currentSharer.textContent = nextPresenterName || presenterName(); });
 socket.on('presenterApprovalNeeded', ({ requesterId, requesterName }) => { pendingRequester = requesterId; approvalText.textContent = `${requesterName} wants to take over sharing.`; approvalBox.classList.remove('hidden'); });
 approveBtn.onclick = () => { socket.emit('respondPresenterRequest', { requesterId: pendingRequester, approved: true }); approvalBox.classList.add('hidden'); };
 denyBtn.onclick = () => { socket.emit('respondPresenterRequest', { requesterId: pendingRequester, approved: false }); approvalBox.classList.add('hidden'); };
-socket.on('presenterRequestResult', ({ approved }) => { status.textContent = approved ? 'Takeover approved.' : 'Takeover denied.'; });
+socket.on('presenterRequestResult', ({ approved }) => { status.textContent = approved ? 'Takeover approved. Click Start Sharing now.' : 'Takeover denied.'; });
 socket.on('forceStopShare', stopBtn.onclick);
